@@ -69,15 +69,17 @@ metadata {
 def parse(String description) {
 	log.debug "description is $description"
 
+	def event = [:]
 	def finalResult = isKnownDescription(description)
-	if (finalResult != "false") {
+	if (finalResult) {
 		log.info finalResult
 		if (finalResult.type == "update") {
 			log.info "$device updates: ${finalResult.value}"
+			event = null
 		}
 		else if (finalResult.type == "power") {
 			def powerValue = (finalResult.value as Integer)/10
-			sendEvent(name: "power", value: powerValue)
+			event = createEvent(name: "power", value: powerValue)
 
 			/*
 				Dividing by 10 as the Divisor is 10000 and unit is kW for the device. AttrId: 0302 and 0300. Simplifying to 10
@@ -87,13 +89,14 @@ def parse(String description) {
 			*/
 		}
 		else {
-			sendEvent(name: finalResult.type, value: finalResult.value)
+			event = createEvent(name: finalResult.type, value: finalResult.value)
 		}
 	}
 	else {
 		log.warn "DID NOT PARSE MESSAGE for description : $description"
 		log.debug parseDescriptionAsMap(description)
 	}
+	return event
 }
 
 // Commands to device
@@ -125,15 +128,15 @@ def setLevel(value) {
 
 def refresh() {
 	[
-			"st rattr 0x${device.deviceNetworkId} ${endpointId} 6 0", "delay 500",
-			"st rattr 0x${device.deviceNetworkId} ${endpointId} 8 0", "delay 500",
-			"st rattr 0x${device.deviceNetworkId} ${endpointId} 0x0B04 0x050B", "delay 500"
+			"st rattr 0x${device.deviceNetworkId} ${endpointId} 6 0", "delay 2000",
+			"st rattr 0x${device.deviceNetworkId} ${endpointId} 8 0", "delay 2000",
+			"st rattr 0x${device.deviceNetworkId} ${endpointId} 0x0B04 0x050B", "delay 2000"
 	]
 
 }
 
 def configure() {
-	onOffConfig() + levelConfig() + powerConfig() + refresh()
+	refresh() + onOffConfig() + levelConfig() + powerConfig()
 }
 
 
@@ -209,13 +212,16 @@ def isKnownDescription(description) {
 		else if (descMap.cluster == "0B04" || descMap.clusterId == "0B04"){
 			isDescriptionPower(descMap)
 		}
+		else {
+			return [:]
+		}
 	}
 	else if(description?.startsWith("on/off:")) {
 		def switchValue = description?.endsWith("1") ? "on" : "off"
 		return	[type: "switch", value : switchValue]
 	}
 	else {
-		return "false"
+		return [:]
 	}
 }
 
@@ -249,7 +255,7 @@ def isDescriptionOnOff(descMap) {
 		return	[type: "switch", value : switchValue]
 	}
 	else {
-		return "false"
+		return [:]
 	}
 
 }
@@ -276,10 +282,9 @@ def isDescriptionLevel(descMap) {
 
 	if (dimmerValue != -1){
 		return	[type: "level", value : dimmerValue]
-
 	}
 	else {
-		return "false"
+		return [:]
 	}
 }
 
@@ -301,16 +306,16 @@ def isDescriptionPower(descMap) {
 		return	[type: "power", value : powerValue]
 	}
 	else {
-		return "false"
+		return [:]
 	}
 }
 
 
 def onOffConfig() {
 	[
-			"zdo bind 0x${device.deviceNetworkId} 1 ${endpointId} 6 {${device.zigbeeId}} {}", "delay 200",
-			"zcl global send-me-a-report 6 0 0x10 0 600 {01}",
-			"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 1500"
+			"zdo bind 0x${device.deviceNetworkId} 1 ${endpointId} 6 {${device.zigbeeId}} {}", "delay 2000",
+			"zcl global send-me-a-report 6 0 0x10 0 600 {01}", "delay 200",
+			"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 2000"
 	]
 }
 
@@ -318,9 +323,9 @@ def onOffConfig() {
 //min level change is 01
 def levelConfig() {
 	[
-			"zdo bind 0x${device.deviceNetworkId} 1 ${endpointId} 8 {${device.zigbeeId}} {}", "delay 200",
-			"zcl global send-me-a-report 8 0 0x20 5 3600 {01}",
-			"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 1500"
+			"zdo bind 0x${device.deviceNetworkId} 1 ${endpointId} 8 {${device.zigbeeId}} {}", "delay 2000",
+			"zcl global send-me-a-report 8 0 0x20 5 3600 {01}", "delay 200",
+			"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 2000"
 	]
 }
 
@@ -328,9 +333,10 @@ def levelConfig() {
 //min change in value is 05
 def powerConfig() {
 	[
-		"zdo bind 0x${device.deviceNetworkId} 1 ${endpointId} 0x0B04 {${device.zigbeeId}} {}", "delay 200",
+		"zdo bind 0x${device.deviceNetworkId} 1 ${endpointId} 0x0B04 {${device.zigbeeId}} {}", "delay 2000",
 		"zcl global send-me-a-report 0x0B04 0x050B 0x29 1 600 {05 00}",				//The send-me-a-report is custom to the attribute type for CentraLite
-		"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 500"
+		"delay 200",
+		"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 2000"
 	]
 }
 
@@ -339,7 +345,10 @@ def setLevelWithRate(level, rate) {
 		rate = "0000"
 	}
 	level = convertToHexString(level * 255 / 100) 				//Converting the 0-100 range to 0-FF range in hex
-	"st cmd 0x${device.deviceNetworkId} ${endpointId} 8 4 {$level $rate}"
+	[
+			"st cmd 0x${device.deviceNetworkId} ${endpointId} 8 4 {$level $rate}",
+			"delay 2000"
+	]
 }
 
 String convertToHexString(value, width=2) {

@@ -87,7 +87,7 @@ metadata {
 def parse(String description) {
     def resultMap = zigbee.getEvent(description)
     if (resultMap) {
-        if ((resultMap.name == "level" && state.trigger == "setLevel") || resultMap.name != "level") {  //doing this to account for weird level reporting bug with GE Link Bulbs
+        if (resultMap.name != "level" || resultMap.value != 0) {  // Ignore level reports of 0 sent when bulb turns off
             sendEvent(resultMap)
         }
     }
@@ -99,7 +99,7 @@ def parse(String description) {
 
 def poll() {
     def refreshCmds = [
-        "st wattr 0x${device.deviceNetworkId} 1 8 0x10 0x21 {${state?.dOnOff ?: '0000'}}", "delay 500"
+        "st wattr 0x${device.deviceNetworkId} 1 8 0x10 0x21 {${state?.dOnOff ?: '0000'}}", "delay 2000"
     ]
 
     return refreshCmds + zigbee.onOffRefresh() + zigbee.levelRefresh()
@@ -188,25 +188,22 @@ def updated() {
 }
 
 def on() {
-    state.trigger = "on/off"
     zigbee.on()
 }
 
 def off() {
-    state.trigger = "on/off"
     zigbee.off()
 }
 
 def refresh() {
     def refreshCmds = [
-        "st wattr 0x${device.deviceNetworkId} 1 8 0x10 0x21 {${state?.dOnOff ?: '0000'}}", "delay 500"
+        "st wattr 0x${device.deviceNetworkId} 1 8 0x10 0x21 {${state?.dOnOff ?: '0000'}}", "delay 2000"
     ]
 
     return refreshCmds + zigbee.onOffRefresh() + zigbee.levelRefresh() + zigbee.onOffConfig()
 }
 
 def setLevel(value) {
-    state.trigger = "setLevel"
     def cmd
     def delayForRefresh = 500
     if (dimRate && (state?.rate != null)) {
