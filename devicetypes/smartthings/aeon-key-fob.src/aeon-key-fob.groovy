@@ -1,3 +1,4 @@
+import groovy.json.JsonOutput
 /**
  *  Copyright 2015 SmartThings
  *
@@ -19,8 +20,10 @@ metadata {
 		capability "Configuration"
 		capability "Sensor"
 		capability "Battery"
+		capability "Health Check"
 
 		fingerprint deviceId: "0x0101", inClusters: "0x86,0x72,0x70,0x80,0x84,0x85"
+		fingerprint mfr: "0086", prod: "0001", model: "0026", deviceJoinName: "Aeon Panic Button"
 	}
 
 	simulator {
@@ -37,14 +40,14 @@ metadata {
 	tiles {
 		standardTile("button", "device.button", width: 2, height: 2) {
 			state "default", label: "", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#ffffff"
-			state "button 1 pushed", label: "pushed #1", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#79b821"
-			state "button 2 pushed", label: "pushed #2", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#79b821"
-			state "button 3 pushed", label: "pushed #3", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#79b821"
-			state "button 4 pushed", label: "pushed #4", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#79b821"
-			state "button 1 held", label: "held #1", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#ffa81e"
-			state "button 2 held", label: "held #2", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#ffa81e"
-			state "button 3 held", label: "held #3", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#ffa81e"
-			state "button 4 held", label: "held #4", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#ffa81e"
+			state "button 1 pushed", label: "pushed #1", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#00A0DC"
+			state "button 2 pushed", label: "pushed #2", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#00A0DC"
+			state "button 3 pushed", label: "pushed #3", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#00A0DC"
+			state "button 4 pushed", label: "pushed #4", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#00A0DC"
+			state "button 1 held", label: "held #1", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#e86d13"
+			state "button 2 held", label: "held #2", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#e86d13"
+			state "button 3 held", label: "held #3", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#e86d13"
+			state "button 4 held", label: "held #4", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#e86d13"
 		}
 		valueTile("battery", "device.battery", inactiveLabel: false, decoration: "flat") {
 			state "battery", label:'${currentValue}% battery', unit:""
@@ -130,5 +133,15 @@ def updated() {
 }
 
 def initialize() {
-	sendEvent(name: "numberOfButtons", value: 4)
+	// Device only goes OFFLINE when Hub is off
+	sendEvent(name: "DeviceWatch-Enroll", value: JsonOutput.toJson([protocol: "zwave", scheme:"untracked"]), displayed: false)
+
+	def zwMap = getZwaveInfo()
+	def buttons = 4 // Default for Key Fob
+
+	// Only one button for Aeon Panic Button
+	if (zwMap && zwMap.mfr == "0086" && zwMap.prod == "0001" && zwMap.model == "0026") {
+		buttons = 1
+	}
+	sendEvent(name: "numberOfButtons", value: buttons)
 }
